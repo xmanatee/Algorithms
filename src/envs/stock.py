@@ -4,7 +4,8 @@ from gym.utils import seeding
 from gym.envs.classic_control import rendering
 import numpy as np
 import pandas as pd
-import os
+
+from utils.accum_sharpe_ratio import SharpeRatio
 
 
 def suffix_mapper(suffix, ignore=None):
@@ -19,27 +20,24 @@ def suffix_mapper(suffix, ignore=None):
     return _map
 
 
-def load_prices():
+def load_prices(names):
     DATA_DIR = 'data/yah_stocks/'
-    filenames = os.listdir(DATA_DIR)
 
-    names = [filenames[0][:-4]]
-    base_df = pd.read_csv(DATA_DIR + filenames[0])
+    base_df = pd.read_csv(DATA_DIR + names[0] + '.csv')
 
-    base_df.rename(columns=suffix_mapper(names[-1], 'Date'),
+    base_df.rename(columns=suffix_mapper(names[0], ['Date']),
                    inplace=True)
 
     base_df.set_index('Date')
 
-    for filename in filenames[1:]:
-        names.append(filename[:-4])
-        df = pd.read_csv(DATA_DIR + filename)
+    for name in names[1:]:
+        df = pd.read_csv(DATA_DIR + name + '.csv')
         df.set_index('Date')
-        df.rename(columns=suffix_mapper(names[-1]), inplace=True)
+        df.rename(columns=suffix_mapper(name), inplace=True)
         base_df = base_df.join(other=df, how='inner')
-        base_df.drop('Date_' + names[-1], axis=1, inplace=True)
+        base_df.drop('Date_' + name, axis=1, inplace=True)
 
-    return names, base_df
+    return base_df
 
 
 class StockEnv(gym.Env):
@@ -54,13 +52,14 @@ class StockEnv(gym.Env):
         cols = ['Open_' + name for name in self.stock_names]
         return prices_df[cols].values
 
-    def __init__(self, reward_type, use_twitter):
-        self.stock_names, prices_df = load_prices()
+    def __init__(self, stock_names, reward_type, use_twitter):
+        self.stock_names = stock_names
+        prices_df = load_prices(self.stock_names)
         self.prices = self.process_prices(prices_df)
 
         self.num_stocks = len(self.stock_names)
 
-        # if reward_type == 'balance': misha loh
+        # if reward_type == 'balance':
         #     self.reward_class = BalanceReward
         # elif reward_type == 'sharpe-ratio':
         #     self.reward_class = SharpRatioReward
@@ -91,32 +90,53 @@ class StockEnv(gym.Env):
 
         action = np.array(action) - 1
 
-        self.assets_count += action
-
+        # print("_A:", action, "| ", end="")
+        old_assets_count = self.assets_count
+        # old_gamma = 1 / np.sqrt(1 + self.cur_step)
         old_prices = self.prices[self.cur_step]
-        self.cur_step += 1
-        new_prices = self.prices[self.cur_step]
 
         transaction_fee = StockEnv.FEE_COEF * np.sum(
             np.abs(action * old_prices))
-        reward = np.sum(self.assets_count * (
-            new_prices - old_prices)) - transaction_fee
 
-        balance = self.balance_history[-1] + reward
+        self.assets_count += action
+        self.cash -= action.dot(old_prices) + transaction_fee
+
+        self.cur_step += 1
+
+        # new_gamma = 1 / np.sqrt(1 + self.cur_step)
+        new_prices = self.prices[self.cur_step]
+        portfolio_eval = self.assets_count.dot(new_prices)
+        balance = self.cash + portfolio_eval
+
+        step_return = balance - self.balance_history[-1]
+
+        # print(step_return)
+
+        self.sharpe.add(step_return)
+        # print("#Ratio: ", self.sharpe.get(), "| ", end="")
+        # reward = - action.dot(old_prices) + \
+        #          self.assets_count.dot(new_prices) * new_gamma + \
+        #          old_assets_count.dot(old_prices) * old_gamma
+
         self.balance_history.append(balance)
 
         state = new_prices
+        reward = step_return
         done = bool(self.cur_step + 1 >= len(self.prices))
 
         return np.array(state), reward, done, {}
 
     def _reset(self):
+        # print("LOL")
         self.cur_step = np.random.randint(
             low=0, high=len(self.prices) - 200)
         state = self.prices[self.cur_step]
         # self.stock_env = Environment()
-        self.assets_count = np.zeros(self.num_stocks)
+        self.cash = 0
+        self.assets_count = np.zeros(self.num_stocks, dtype='int32')
         self.balance_history = [0]
+
+        self.sharpe = SharpeRatio()
 
         return np.array(state)
 

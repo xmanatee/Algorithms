@@ -1,3 +1,11 @@
+# https://github.com/Amay22/PyFolio.git
+# https://github.com/quantopian/zipline.git
+# finpy
+
+# pyfolio
+-e git+https://github.com/quantopian/pyfolio.git
+
+pysharperratio
 agent
 lasagne
 cloudpickle
@@ -12,3 +20,4 @@ tensorflow
 Theano
 gensim
 matplotlib
+

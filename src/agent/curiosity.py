@@ -40,6 +40,10 @@ def extract_params(bnn_weights, pred_loss, delta=0.01):
 
 def get_vime_reward(prev_mu, new_mu, prev_sigma, new_sigma):
     """KL for normal approximation"""
+    # TODO: DIRTY HACK HERE
+    prev_sigma = T.clip(prev_sigma, 1e-6, 5)
+    new_sigma = T.clip(new_sigma, 1e-6, 5)
+
     kl = T.sum((new_sigma / prev_sigma) ** 2)
     kl += 2 * T.sum(T.log(prev_sigma))
     kl -= 2 * T.sum(T.log(new_sigma))
@@ -66,14 +70,14 @@ def compile_vime_reward(l_prediction, l_prev_states, l_actions,
     in a batch
     """
     prev_states = T.matrix("previous states")
-    actions = T.ivector("actions")
+    actions = T.imatrix("actions")
     next_states = T.matrix("next states")
     if n_samples == 1:
         def get_bnn(state, action):
             return lasagne.layers.get_output(
                 l_prediction,
                 inputs={l_prev_states: state[None, :],
-                        l_actions: action[None]},
+                        l_actions: action[None, :]},
                 **kwargs)
     else:
         def get_bnn(state, action):
@@ -81,15 +85,12 @@ def compile_vime_reward(l_prediction, l_prev_states, l_actions,
                 l_prediction,
                 input_dict={
                     l_prev_states: state[None, :],
-                    l_actions: action[None]},
+                    l_actions: action[None, :]},
                 n_samples=n_samples,
                 **kwargs)
 
     vime_reward_per_state, auto_updates = theano.map(
-        lambda s, a, s_next: get_r_vime_on_state(
-            weights,
-            get_loss(get_bnn(s, a), s_next),
-            delta),
+        lambda s, a, s_next: get_r_vime_on_state(weights, get_loss(get_bnn(s, a), s_next), delta),
         sequences=[prev_states, actions, next_states])
 
     return theano.function([prev_states, actions, next_states],

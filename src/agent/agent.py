@@ -1,9 +1,11 @@
 import numpy as np
 
+import theano.tensor as T
 import lasagne
 from lasagne.layers import InputLayer, DenseLayer, ReshapeLayer
 
 from utils.multi_probabilistic import MultiProbabilisticResolver
+from utils.action_encoder import ActionEncoder
 
 from agentnet.agent import Agent
 
@@ -11,14 +13,15 @@ from agentnet.agent import Agent
 def build_agent(action_shape, state_shape):
     observation_layer = InputLayer((None, *state_shape))
 
-    net = DenseLayer(observation_layer, 100, name='dense1')
+    net = DenseLayer(observation_layer, 10,
+                     nonlinearity=lasagne.nonlinearities.sigmoid,
+                     name='dense1')
     # net = DenseLayer(net, 256, name='dense2')
 
     # a layer that predicts Qvalues
 
     policy_layer_flattened = DenseLayer(
-        net,
-        num_units=np.prod(action_shape),
+        net, num_units=np.prod(action_shape),
         nonlinearity=lasagne.nonlinearities.softmax,
         name="q-evaluator layer")
 
@@ -35,6 +38,16 @@ def build_agent(action_shape, state_shape):
         policy_layer,
         name="e-greedy action picker",
         assume_normalized=True)
+
+    # print("ActionL: ", action_layer.output_shape)
+
+    # action_layer = ActionEncoder(
+    #     action_layer,
+    #     base=3)
+
+    # print("ActionL': ", action_layer.output_shape)
+
+    # action_layer = T.printing.Print("A")(action_layer)
 
     # all together
     agent = Agent(observation_layers=observation_layer,

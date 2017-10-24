@@ -1,8 +1,13 @@
+"""
+https://arxiv.org/pdf/1605.09674.pdf
+"""
+
 import numpy as np
 import theano
 import theano.tensor as T
 import lasagne
 from lasagne.layers import InputLayer, DenseLayer, EmbeddingLayer
+from utils.action_encoder import ActionEncoder
 
 from agent.bnn_utils import bbpwrap, NormalApproximation
 from agent.curiosity import compile_vime_reward
@@ -18,11 +23,17 @@ class BayesEmbLayer(EmbeddingLayer):
     pass
 
 
+def pioshape(prefix, layer):
+    print(prefix, ": ", layer.input_shape, " -> ", layer.output_shape)
+
 class BNN:
     def __init__(self, state_shape, action_shape, action_emb_shape,
                  replay):
         self.curiosity = 0.01
         target_rho = 1
+
+        # print("state_shape: ", state_shape)
+        # print("action_shape: ", action_shape)
 
         l_state = InputLayer((None, *state_shape),
                              name='state var')
@@ -30,21 +41,34 @@ class BNN:
                               input_var=T.imatrix(),
                               name='actions var')
 
-        # TODO: HUGE FIX NEEDED HERE
-        l_action_emb = BayesEmbLayer(l_action, *action_emb_shape)
+        # l_state = T.printing.Print(">> l_state: ")(l_state)
+        # l_action = T.printing.Print(">> l_action: ")(l_action)
 
-        l_action_emb_flat = lasagne.layers.flatten(l_action_emb)
+        # TODO: HUGE FIX NEEDED HERE
+        action_range = action_emb_shape[1] ** action_emb_shape[0]
+        action_emb_size = action_emb_shape[1] * action_emb_shape[0]
+
+        l_action_encoded = ActionEncoder(l_action, 3)
+        l_action_emb = BayesEmbLayer(
+            l_action_encoded,
+            input_size=action_range,
+            output_size=action_emb_size
+        )
+
+        # print("l_action_emb: ", l_action_emb.input_shape, " -> ", l_action_emb.output_shape)
+
+        # l_action_emb_flat = lasagne.layers.flatten(l_action_emb)
 
         # l_action_emb_flat = BayesEmbLayer(
         #     l_action,
         #     input_size=action_shape[0],
         #     output_size=np.prod(action_emb_shape))
 
-        l_concat = lasagne.layers.concat([l_action_emb_flat, l_state])
+        l_concat = lasagne.layers.concat([l_action_emb, l_state])
 
+        print("A: ", l_action.output_shape)
         print("A_emb: ", l_action_emb.output_shape)
         print("S: ", l_state.output_shape)
-        print("A_emb_flat: ", l_action_emb_flat.output_shape)
         print("Concat: ", l_concat.output_shape)
 
         l_dense = BayesDenseLayer(
@@ -53,10 +77,14 @@ class BNN:
             nonlinearity=lasagne.nonlinearities.tanh,
             name='dense 1')
 
+        pioshape("l_dense: ", l_dense)
+
         l_out = BayesDenseLayer(
             l_dense,
             num_units=state_shape[0],
             nonlinearity=None)
+
+        pioshape("l_out: ", l_out)
 
         params = lasagne.layers.get_all_params(l_out, trainable=True)
 
@@ -74,7 +102,7 @@ class BNN:
 
         loss = mse + 0.01 * reg
 
-        updates = lasagne.updates.adam(loss, params)
+        updates = lasagne.updates.adam(loss, params, learning_rate=0.01)
 
         self.train_step = theano.function(
             [l_state.input_var, l_action.input_var, next_states],
@@ -82,10 +110,18 @@ class BNN:
 
         # sample random sessions from pool
         observations, = replay.observations
-        actions, = replay.actions
+        # observations = T.printing.Print(">>>> observations: ")(observations)
+
         observations_flat = observations[:, :-1].reshape(
             (-1,) + tuple(observations.shape[2:]))
-        actions_flat = actions[:, :-1].reshape((-1,))
+        # observations_flat = T.printing.Print(">>>> observations_flat: ")(observations_flat)
+
+        actions, = replay.actions
+        # actions = T.printing.Print(">>>> actions: ")(actions)
+
+        actions_flat = actions[:, :-1].reshape(
+            (-1,) + tuple(actions.shape[2:]))
+        # actions_flat = T.printing.Print(">>>> actions_flat: ")(actions_flat)
         next_observations_flat = observations[:, 1:].reshape(
             (-1,) + tuple(observations.shape[2:]))
         self.sample_from_pool = theano.function(
@@ -102,29 +138,36 @@ class BNN:
             params,
             n_samples=10)
 
+
         self.vime_reward_ma = 10.
 
     def add_vime_reward(self, observations, actions, rewards,
                         is_alive, h0=0):
+
         assert isinstance(observations, np.ndarray)
         observations_flat = observations[:, :-1].reshape(
             (-1,) + observations.shape[2:]).astype('float32')
-        actions_flat = actions[:, :-1].reshape((-1,)).astype('int32')
+        actions_flat = actions[:, :-1].reshape(
+            (-1,) + actions.shape[2:]).astype('int32')
         next_observations_flat = observations[:, 1:].reshape(
             (-1,) + observations.shape[2:]).astype('float32')
 
+        # print("observations_flat.shape: ", observations_flat.shape)
+        # print("actions_flat.shape: ", actions_flat.shape)
+        # print("next_observations_flat.shape: ", next_observations_flat.shape)
         vime_rewards = self.get_vime_reward_elwise(
             observations_flat,
             actions_flat,
             next_observations_flat)
+
         vime_rewards = np.concatenate(
             [vime_rewards.reshape(rewards[:, :-1].shape),
              np.zeros_like(rewards[:, -1:]), ], axis=1)
+
         # normalize by moving average
         self.vime_reward_ma = \
             0.99 * self.vime_reward_ma + 0.01 * vime_rewards.mean()
 
-        surrogate_rewards = rewards + \
-            self.curiosity / self.vime_reward_ma * vime_rewards
-        return (
-            observations, actions, surrogate_rewards, is_alive, h0)
+        surrogate_rewards = rewards + self.curiosity / self.vime_reward_ma * vime_rewards
+
+        return observations, actions, surrogate_rewards, is_alive, h0
