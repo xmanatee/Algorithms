@@ -2,11 +2,11 @@
 .idea/
 
 # Data directory
-src/data/
+data/
 
 # Twitter data directory
-src/twitter/data/
-src/twitter/dumps/
+twitter/data/
+twitter/dumps/
 
 #IPython checkpoints
 **/.ipynb_checkpoints/
@@ -16,4 +16,6 @@ src/twitter/dumps/
 */*.DS_Store
 **/*.pyc
 
-src/records/
+records/
+
+other/

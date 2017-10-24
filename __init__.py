@@ -1,6 +1,6 @@
 import sys
 
-from gym.envs.registration import register
+# from gym.envs.registration import register
 sys.path.insert(0, '../../Framework/src/')
 
 register(
