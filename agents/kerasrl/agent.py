@@ -64,7 +64,6 @@ def build_agent(env):
 
 
 if __name__ == '__main__':
-    # ENV_NAME = 'Pendulum-v0'
     ENV_NAME = 'FrontoPolarStocks-v0'
     gym.undo_logger_setup()
 
