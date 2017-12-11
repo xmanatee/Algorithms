@@ -1,13 +1,9 @@
-import numpy as np
-
-import theano.tensor as T
 import lasagne
+import numpy as np
+from agentnet.agent import Agent
 from lasagne.layers import InputLayer, DenseLayer, ReshapeLayer
 
-from utils.multi_probabilistic import MultiProbabilisticResolver
-from utils.action_encoder import ActionEncoder
-
-from agentnet.agent import Agent
+from agents.agentnet.multi_probabilistic import MultiProbabilisticResolver
 
 
 def build_agent(action_shape, state_shape):

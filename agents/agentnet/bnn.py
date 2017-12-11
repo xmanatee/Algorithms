@@ -2,15 +2,15 @@
 https://arxiv.org/pdf/1605.09674.pdf
 """
 
+import lasagne
 import numpy as np
 import theano
 import theano.tensor as T
-import lasagne
+from agents.curiosity import compile_vime_reward
 from lasagne.layers import InputLayer, DenseLayer, EmbeddingLayer
-from utils.action_encoder import ActionEncoder
 
-from agent.bnn_utils import bbpwrap, NormalApproximation
-from agent.curiosity import compile_vime_reward
+from agents.agentnet.action_encoder import ActionEncoder
+from agents.agentnet.bnn_utils import bbpwrap, NormalApproximation
 
 
 @bbpwrap(NormalApproximation())

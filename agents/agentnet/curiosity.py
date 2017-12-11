@@ -1,11 +1,11 @@
 """
 computes the curiosity reward batch-wise
 """
+import lasagne
 import theano
 import theano.tensor as T
-import lasagne
 
-from agent.bnn_utils import sample_output
+from agents.agentnet.bnn_utils import sample_output
 
 
 def extract_params(bnn_weights, pred_loss, delta=0.01):
