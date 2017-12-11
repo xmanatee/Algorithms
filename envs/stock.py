@@ -22,7 +22,14 @@ def suffix_mapper(suffix, ignore=None):
     return _map
 
 
-TRADING_BASE_NAME = "DOLLAR"
+def get_states(prices_df, stock_names):
+    prices_df.sort_values(by='Date', inplace=True)
+    cols = ['Open_' + name for name in stock_names]
+    prices = prices_df[cols].values
+
+    return daily_relative_price(prices)
+
+# TRADING_BASE_NAME = "DOLLAR"
 
 
 def load_prices(names):
@@ -40,10 +47,10 @@ def load_prices(names):
         df.rename(columns=suffix_mapper(name), inplace=True)
         base_df = base_df.join(other=df, how='inner')
         base_df.drop('Date_' + name, axis=1, inplace=True)
-    print(base_df.shape)
+    # print(base_df.shape)
 
-    names.append(TRADING_BASE_NAME)
-    base_df["Open_" + TRADING_BASE_NAME] = np.ones(base_df.shape[0])
+    # names.append(TRADING_BASE_NAME)
+    # base_df["Open_" + TRADING_BASE_NAME] = np.ones(base_df.shape[0])
 
     return base_df
 
@@ -55,18 +62,12 @@ class StockEnv(gym.Env):
         'video.frames_per_second': 30
     }
 
-    def get_states(self, prices_df):
-        prices_df.sort_values(by='Date', inplace=True)
-        cols = ['Open_' + name for name in self.stock_names]
-        prices = prices_df[cols].values
-
-        return daily_relative_price(prices)
-
     def __init__(self, stock_names, reward_type=None, use_twitter=None):
         self.stock_names = stock_names
 
         prices_df = load_prices(self.stock_names)
-        self.states = self.get_states(prices_df)
+        self.states = get_states(prices_df, self.stock_names)
+        print("All observation shape:", self.states.shape)
         self.num_stocks = self.states.shape[1]
 
         self.viewer = None

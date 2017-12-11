@@ -18,7 +18,7 @@ class ClipProcessor(WhiteningNormalizerProcessor):
         return np.clip(action, 0., 1.)
 
 
-def build_agent(env):
+def build_agent(env, training=False):
     assert len(env.action_space.shape) == 1
     nb_actions = env.action_space.shape[0]
 
@@ -26,15 +26,15 @@ def build_agent(env):
     actor = Sequential()
     actor.add(Flatten(input_shape=(1,) + env.observation_space.shape))
     actor.add(Dense(16))
-    actor.add(Activation('relu'))
-    actor.add(Dense(16))
+    # actor.add(Activation('relu'))
+    # actor.add(Dense(16))
     actor.add(Activation('relu'))
     actor.add(Dense(16))
     actor.add(Activation('relu'))
     actor.add(Dense(nb_actions))
-    actor.add(Activation('linear'))
-    # actor.add(Activation('softmax'))
-    print(actor.summary())
+    # actor.add(Activation('linear'))
+    actor.add(Activation('softmax'))
+    # print(actor.summary())
 
     action_input = Input(shape=(nb_actions,), name='action_input')
     observation_input = Input(shape=(1,) + env.observation_space.shape, name='observation_input')
@@ -43,18 +43,20 @@ def build_agent(env):
     x = Dense(32)(x)
     x = Activation('relu')(x)
     x = Dense(32)(x)
-    x = Activation('relu')(x)
-    x = Dense(32)(x)
+    # x = Activation('relu')(x)
+    # x = Dense(32)(x)
     x = Activation('relu')(x)
     x = Dense(1)(x)
     x = Activation('linear')(x)
     critic = Model(inputs=[action_input, observation_input], outputs=x)
-    print(critic.summary())
+    # print(critic.summary())
 
     # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
     # even the metrics!
     memory = SequentialMemory(limit=100000, window_length=1)
-    random_process = OrnsteinUhlenbeckProcess(size=nb_actions, theta=.15, mu=0., sigma=.3)
+    random_process = None
+    if training:
+        random_process = OrnsteinUhlenbeckProcess(size=nb_actions, theta=.15, mu=0., sigma=.3)
     agent = DDPGAgent(nb_actions=nb_actions, actor=actor, critic=critic, critic_action_input=action_input,
                       memory=memory, nb_steps_warmup_critic=100, nb_steps_warmup_actor=100,
                       random_process=random_process, gamma=.99, target_model_update=1e-3,
@@ -82,11 +84,11 @@ if __name__ == '__main__':
     # Ctrl + C.
 
     steps = 1e6
-    agent.fit(env, nb_steps=steps, visualize=True, verbose=1, nb_max_episode_steps=200)
+    # agent.fit(env, nb_steps=steps, visualize=True, verbose=1, nb_max_episode_steps=200)
 
     # After training is done, we save the final weights.
-    model_dump_filepath = 'pretrained_models/ddpg_{}_weights.h5f'
-    agent.save_weights(model_dump_filepath.format(ENV_NAME), overwrite=True)
+    model_dump_filepath = 'pretrained_models/ddpg_{}_weights.h5f'.format(ENV_NAME)
+    # agent.save_weights(model_dump_filepath, overwrite=True)
 
     # Finally, evaluate our algorithm for 5 episodes.
     agent.load_weights(model_dump_filepath)
