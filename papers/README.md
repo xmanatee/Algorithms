@@ -10,3 +10,5 @@ https://pypi.python.org/pypi/pysharperratio/0.1.11
 
 https://dashee87.github.io/deep%20learning/python/predicting-cryptocurrency-prices-with-deep-learning/
 
+http://www.wildml.com/2018/02/introduction-to-learning-to-trade-with-reinforcement-learning/
+
